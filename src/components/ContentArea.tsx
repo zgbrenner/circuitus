@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { FileText, Bookmark, Highlighter } from 'lucide-react';
 import type { DocumentChapter } from '@/types';
+import { extractCitations } from '@/lib/citations';
 
 interface ContentAreaProps {
   /** Render chapters sequentially (uploaded docs) */
@@ -266,6 +267,10 @@ export default function ContentArea({
     setSelectionToolbar(null);
   };
 
+  const citations = extractCitations(
+    chapters?.map((ch) => `${ch.title} ${ch.content}`).join(' ') ?? rawContent ?? '',
+    10,
+  );
   const hasContent = !isEmpty && (chapters?.length || rawContent || children);
 
   return (
@@ -312,6 +317,34 @@ export default function ContentArea({
         </header>
 
         {/* Content */}
+
+        {citations.length > 0 && (
+          <nav
+            aria-label="Extracted citations"
+            className="mb-8 bg-paper border border-rule px-4 py-3"
+          >
+            <div className="flex items-baseline justify-between gap-3 mb-2">
+              <p className="kicker text-brass-dim">Citation Signal Map</p>
+              <p className="font-mono text-[9px] text-ink-muted">
+                {citations.length} detected reference{citations.length === 1 ? '' : 's'}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {citations.map((citation) => (
+                <span
+                  key={citation.id}
+                  className="inline-flex items-center gap-2 border border-rule bg-paper-cool px-2 py-1 font-mono text-[10px] text-ink-soft"
+                  title={`${citation.type} citation`}
+                >
+                  <span className="uppercase text-brass-dim">{citation.type}</span>
+                  <span>{citation.text}</span>
+                  {citation.count > 1 && <span className="text-ink-muted">×{citation.count}</span>}
+                </span>
+              ))}
+            </div>
+          </nav>
+        )}
+
         {!hasContent ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <FileText className="w-10 h-10 text-rule-strong mb-5" />

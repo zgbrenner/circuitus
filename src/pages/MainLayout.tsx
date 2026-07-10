@@ -46,6 +46,7 @@ import { useAutoPilot } from '@/hooks/useAutoPilot';
 import { copyAnnotationsToClipboard } from '@/lib/export';
 import { pickSuggestions } from '@/data/suggestion-pool';
 import { standinDocuments as _standinDocs, pickWeeklyAuthorities } from '@/data/standin-documents';
+import { searchPracticeLibrary, type LibrarySearchResult } from '@/lib/library-search';
 import type { DocumentChapter, StoredDocument, StandinDocument } from '@/types';
 
 const FONT_SIZES = [13, 14.5, 16.5];
@@ -115,9 +116,7 @@ export default function MainLayout({ onLogout }: MainLayoutProps) {
   );
 
   // Search state
-  const [searchResults, setSearchResults] = useState<{ label: string; docId?: string }[] | null>(
-    null,
-  );
+  const [searchResults, setSearchResults] = useState<LibrarySearchResult[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
 
   // Import error / export feedback banner
@@ -510,15 +509,7 @@ export default function MainLayout({ onLogout }: MainLayoutProps) {
 
     await new Promise((r) => setTimeout(r, SEARCH_DELAY_MS));
 
-    const results: { label: string; docId?: string }[] = [];
-    for (const doc of _standinDocs) {
-      if (
-        doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        doc.shortTitle.toLowerCase().includes(searchQuery.toLowerCase())
-      ) {
-        results.push({ label: doc.shortTitle, docId: doc.id });
-      }
-    }
+    const results: LibrarySearchResult[] = searchPracticeLibrary(_standinDocs, searchQuery, 6);
 
     if (results.length === 0) {
       results.push({ label: `No matches in the practice library for “${searchQuery}”.` });
@@ -532,7 +523,7 @@ export default function MainLayout({ onLogout }: MainLayoutProps) {
     setSearchLoading(false);
   }
 
-  function handleSearchResultClick(result: { label: string; docId?: string }) {
+  function handleSearchResultClick(result: LibrarySearchResult) {
     setSearchResults(null);
     setSearchQuery('');
     if (result.docId) {
@@ -681,11 +672,19 @@ export default function MainLayout({ onLogout }: MainLayoutProps) {
                     onClick={() => handleSearchResultClick(r)}
                     className="w-full text-left px-4 py-2 text-xs font-sans hover:bg-cream transition-colors"
                   >
-                    <span
-                      className={r.docId ? 'text-text-main' : 'text-text-muted italic'}
-                    >
+                    <span className={r.docId ? 'text-text-main' : 'text-text-muted italic'}>
                       {r.label}
                     </span>
+                    {r.snippet && (
+                      <span className="mt-1 block font-serif text-[11px] leading-snug text-ink-muted line-clamp-2">
+                        {r.snippet}
+                      </span>
+                    )}
+                    {r.citations && r.citations.length > 0 && (
+                      <span className="mt-1 block font-mono text-[9px] text-brass-dim">
+                        {r.citations.join(' · ')}
+                      </span>
+                    )}
                   </button>
                 ))}
                 <button
