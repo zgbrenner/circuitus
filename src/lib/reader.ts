@@ -101,12 +101,28 @@ export function hostOf(url: string): string {
   }
 }
 
+/**
+ * Strip every match repeatedly until the string stops changing — a single
+ * pass can leave a dangerous substring behind when removal reassembles one
+ * (e.g. `<<x>script>` → one pass leaves `<script>`).
+ */
+function stripToFixpoint(s: string, re: RegExp): string {
+  let prev: string;
+  do {
+    prev = s;
+    s = s.replace(re, '');
+  } while (s !== prev);
+  return s;
+}
+
 /** Flatten markdown/HTML decoration out of a text fragment. */
 function cleanText(s: string): string {
-  return s
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/<[^>]+>/g, '')
+  return stripToFixpoint(
+    s
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1'),
+    /<[^>]+>/g
+  )
     .replace(/[`*_]+/g, '')
     .replace(/&quot;/g, '"')
     .replace(/&#0?39;/g, "'")
@@ -184,7 +200,9 @@ function resolveDdgHref(href: string): { url: string; internal: boolean } | null
       const real = new URL(uddg);
       if (real.protocol !== 'http:' && real.protocol !== 'https:') return null;
       // Ad clicks occasionally hide behind a bing redirect inside uddg.
-      if (real.hostname.toLowerCase().endsWith('bing.com') && real.pathname.includes('aclick')) {
+      const realHost = real.hostname.toLowerCase();
+      const isBing = realHost === 'bing.com' || realHost.endsWith('.bing.com');
+      if (isBing && real.pathname.includes('aclick')) {
         return null;
       }
       return { url: real.toString(), internal: false };

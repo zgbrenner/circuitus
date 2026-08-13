@@ -65,10 +65,17 @@ function safeHttpUrl(raw: string): string | null {
 
 /** Convert autolinks to markdown links, then strip any remaining raw HTML. */
 function prepInline(text: string): string {
-  return text
-    .replace(/<(https?:\/\/[^>\s]+)>/g, '[$1]($1)')
-    .replace(/<\/?[a-zA-Z][^>]*>/g, '')
-    .replace(/<!--[\s\S]*?-->/g, '');
+  let s = text.replace(/<(https?:\/\/[^>\s]+)>/g, '[$1]($1)');
+  // Strip tags/comments repeatedly until stable: a single pass can leave a
+  // dangerous substring behind when removal reassembles one (e.g.
+  // `<<x>script>` → one pass leaves `<script>`). Output is only ever placed
+  // in React text nodes, so this is defense in depth, not the last line.
+  let prev: string;
+  do {
+    prev = s;
+    s = s.replace(/<\/?[a-zA-Z][^>]*>/g, '').replace(/<!--[\s\S]*?-->/g, '');
+  } while (s !== prev);
+  return s;
 }
 
 // ── Inline parsing ───────────────────────────────────────────────────────
