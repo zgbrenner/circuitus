@@ -66,6 +66,37 @@ const FIREFOX_DEVTOOLS_CHORDS: ShortcutChord[] = [
 
 const STORAGE_KEY = 'circuitus_shortcut_chord';
 
+/**
+ * Hot-corner cover trigger (opt-in). When enabled, dwelling the pointer in
+ * the chosen top corner engages the cover through the same path as the
+ * chord. 'off' by default — mouse-only entry must be a deliberate choice.
+ */
+export type HotCorner = 'off' | 'tl' | 'tr';
+
+const HOT_CORNER_KEY = 'circuitus_hot_corner';
+/** Corner zone: within this many px of both edges. */
+const HOT_CORNER_EDGE_PX = 4;
+/** Continuous dwell required inside the zone before the cover engages. */
+const HOT_CORNER_DWELL_MS = 250;
+
+function loadHotCorner(): HotCorner {
+  try {
+    const raw = localStorage.getItem(HOT_CORNER_KEY);
+    if (raw === 'off' || raw === 'tl' || raw === 'tr') return raw;
+  } catch {
+    // ignore
+  }
+  return 'off';
+}
+
+function saveHotCorner(value: HotCorner): void {
+  try {
+    localStorage.setItem(HOT_CORNER_KEY, value);
+  } catch {
+    // ignore
+  }
+}
+
 function isFirefox(): boolean {
   if (typeof navigator === 'undefined') return false;
   return /firefox/i.test(navigator.userAgent);
@@ -115,6 +146,8 @@ export interface UseQuickRefReturn {
   destination: QuickRefDestination;
   chord: ShortcutChord;
   setChord: (next: ShortcutChord) => void;
+  hotCorner: HotCorner;
+  setHotCorner: (next: HotCorner) => void;
   saveQuickRefState: (scrollTop: number, documentId: string | null, activeTab: string | null) => void;
   /** Lazy accessor for the saved pre-quickref state. Read inside an event handler. */
   getPreState: () => { scrollTop: number; documentId: string | null; activeTab: string | null };
@@ -124,6 +157,7 @@ export interface UseQuickRefReturn {
 export function useQuickRef(): UseQuickRefReturn {
   const [isQuickRef, setIsQuickRef] = useState(false);
   const [chord, setChordState] = useState<ShortcutChord>(() => loadChord());
+  const [hotCorner, setHotCornerState] = useState<HotCorner>(() => loadHotCorner());
   const [destination, setDestination] = useState<QuickRefDestination>(() => ({
     ...DESTINATION_POOL[0],
     scrollPercent: jitterScrollPercent(),
@@ -138,6 +172,11 @@ export function useQuickRef(): UseQuickRefReturn {
   const setChord = useCallback((next: ShortcutChord) => {
     saveChord(next);
     setChordState(next);
+  }, []);
+
+  const setHotCorner = useCallback((next: HotCorner) => {
+    saveHotCorner(next);
+    setHotCornerState(next);
   }, []);
 
   const enterQuickRef = useCallback(() => {
@@ -179,6 +218,59 @@ export function useQuickRef(): UseQuickRefReturn {
     return () => window.removeEventListener('keydown', handler, { capture: true });
   }, [chord, isQuickRef, enterQuickRef, exitQuickRef]);
 
+  // Hot corner: dwell the pointer in the configured top corner to engage
+  // the cover via the same enterQuickRef path as the chord. Deliberately
+  // one-way — the hot corner only ENTERS the cover; exiting stays
+  // chord-only so a stray mouse pass can never reveal the real screen.
+  // The listener is not registered at all while covered or when 'off'.
+  useEffect(() => {
+    if (hotCorner === 'off' || isQuickRef) return;
+
+    // Plain locals instead of state: zero React churn per pointermove.
+    let dwellTimer: ReturnType<typeof setTimeout> | null = null;
+    let inZone = false;
+
+    const cancelDwell = () => {
+      if (dwellTimer) {
+        clearTimeout(dwellTimer);
+        dwellTimer = null;
+      }
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      // Bail fast: two comparisons for the common far-from-corner case.
+      const inside =
+        e.clientY <= HOT_CORNER_EDGE_PX &&
+        (hotCorner === 'tl'
+          ? e.clientX <= HOT_CORNER_EDGE_PX
+          : e.clientX >= window.innerWidth - HOT_CORNER_EDGE_PX);
+      if (inside === inZone) return;
+      inZone = inside;
+      if (inside) {
+        dwellTimer = setTimeout(enterQuickRef, HOT_CORNER_DWELL_MS);
+      } else {
+        cancelDwell();
+      }
+    };
+
+    // A pointer that exits the window entirely has left the zone — cancel
+    // so a fast fling toward browser chrome doesn't count as a dwell.
+    const onPointerOut = (e: PointerEvent) => {
+      if (e.relatedTarget === null && inZone) {
+        inZone = false;
+        cancelDwell();
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerout', onPointerOut, { passive: true });
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerout', onPointerOut);
+      cancelDwell();
+    };
+  }, [hotCorner, isQuickRef, enterQuickRef]);
+
   useEffect(() => {
     document.title = isQuickRef
       ? `Circuitus | ${destination.label} — Practice Guide`
@@ -192,6 +284,8 @@ export function useQuickRef(): UseQuickRefReturn {
     destination,
     chord,
     setChord,
+    hotCorner,
+    setHotCorner,
     saveQuickRefState,
     getPreState,
     exitQuickRef,

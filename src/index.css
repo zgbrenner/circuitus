@@ -542,3 +542,49 @@
 .print-only {
   display: none;
 }
+
+/* ── Citations page — print the retrieved memo clean ───────────────
+   Scoped by .citations-print-root (the Citations page root element);
+   these rules are inert on every other page. When an article is open,
+   the left rail / query bar / settings popover (.citations-chrome)
+   drop out, the memo expands full-width, and the scroll containers
+   stop clipping so the copy can flow across printed pages. */
+@media print {
+  /* Un-clip the layout chain ABOVE the page (MainLayout's h-screen /
+     overflow-hidden shells). :has() keeps this scoped to ancestors of
+     the Citations page only. */
+  body:has(.citations-print-root) div:has(.citations-print-root) {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  /* The page's own containers: no clipping, natural height. */
+  .citations-print-root,
+  .citations-print-root .citations-main-col,
+  .citations-print-root .citations-article-scroll {
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Rails, search bar, and settings popover are screen chrome. */
+  .citations-print-root .citations-chrome {
+    display: none !important;
+  }
+
+  /* Let the memo take the full sheet. */
+  .citations-print-root .citations-article-scroll {
+    padding: 0 !important;
+  }
+  .citations-print-root .citations-article-scroll > div {
+    max-width: none !important;
+    margin: 0 !important;
+  }
+  .citations-print-root article {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0.2in 0 !important;
+    background: #fff !important;
+  }
+}

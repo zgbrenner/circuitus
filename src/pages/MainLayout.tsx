@@ -21,6 +21,7 @@ const AudioLibraryPage = lazy(() => import('@/pages/AudioLibraryPage'));
 const ModelsPage = lazy(() => import('@/pages/ModelsPage'));
 const CitationsPage = lazy(() => import('@/pages/CitationsPage'));
 const ExhibitsPage = lazy(() => import('@/pages/ExhibitsPage'));
+const DepositionsPage = lazy(() => import('@/pages/DepositionsPage'));
 const AssistantPanel = lazy(() => import('@/components/AssistantPanel'));
 
 function PageFallback() {
@@ -105,7 +106,8 @@ export default function MainLayout({ onLogout }: MainLayoutProps) {
   const [activeTabId, setActiveTabId] = useState<string | null>(matterTabs[0]?.id ?? null);
 
   // Quick-reference cover
-  const { isQuickRef, destination, chord, saveQuickRefState, getPreState } = useQuickRef();
+  const { isQuickRef, destination, chord, hotCorner, setHotCorner, saveQuickRefState, getPreState } =
+    useQuickRef();
   const wasQuickRefRef = useRef(false);
   const quickRefDoc = useMemo(
     () => _standinDocs.find((d) => d.id === destination.docId) ?? _standinDocs[0],
@@ -810,6 +812,10 @@ export default function MainLayout({ onLogout }: MainLayoutProps) {
           <Suspense fallback={<PageFallback />}>
             <ExhibitsPage />
           </Suspense>
+        ) : activeNav === 'Depositions' ? (
+          <Suspense fallback={<PageFallback />}>
+            <DepositionsPage />
+          </Suspense>
         ) : isReading ? (
           <ContentArea
             isEmpty={false}
@@ -896,6 +902,8 @@ export default function MainLayout({ onLogout }: MainLayoutProps) {
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
         quickRefChord={shortcutHint}
+        hotCorner={hotCorner}
+        onHotCornerChange={setHotCorner}
       />
     </div>
   );

@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   'Exhibits',
   'Authorities',
   'Citations',
+  'Depositions',
   'Models',
   'Compliance',
   'Audio',

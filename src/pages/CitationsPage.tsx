@@ -3,8 +3,11 @@ import {
   ArrowLeft,
   ArrowRight,
   Globe,
+  Minus,
   MonitorPlay,
   Pin,
+  Plus,
+  Printer,
   RotateCw,
   Search,
   Settings,
@@ -26,6 +29,34 @@ import { Markdown } from '@/lib/markdown';
 import type { BrowserState, CircuitusDesktop } from '@/types/desktop';
 
 const PINNED_KEY = 'circuitus_pinned_authorities';
+
+// ── Reading comfort — article font size presets ─────────────────────────
+const FONTSIZE_KEY = 'circuitus_citations_fontsize';
+/** Three reading sizes for the retrieved-copy view (px). */
+const FONT_STEPS = [13.5, 15, 16.5] as const;
+const DEFAULT_FONT_STEP = 1; // 15px
+
+function loadFontStep(): number {
+  try {
+    const raw = localStorage.getItem(FONTSIZE_KEY);
+    if (raw !== null) {
+      const px = Number(raw);
+      const idx = FONT_STEPS.findIndex((s) => s === px);
+      if (idx >= 0) return idx;
+    }
+  } catch {
+    // ignore
+  }
+  return DEFAULT_FONT_STEP;
+}
+
+function persistFontStep(step: number) {
+  try {
+    localStorage.setItem(FONTSIZE_KEY, String(FONT_STEPS[step]));
+  } catch {
+    // ignore quota/storage errors
+  }
+}
 
 interface PinnedAuthority {
   url: string;
@@ -101,6 +132,16 @@ export default function CitationsPage() {
     index: -1,
   });
   const [pinned, setPinned] = useState<PinnedAuthority[]>(() => loadPinned());
+  const [fontStep, setFontStep] = useState<number>(() => loadFontStep());
+  const articleFontSize = FONT_STEPS[fontStep];
+
+  function stepFontSize(delta: number) {
+    setFontStep((prev) => {
+      const next = Math.min(FONT_STEPS.length - 1, Math.max(0, prev + delta));
+      persistFontStep(next);
+      return next;
+    });
+  }
 
   // Settings
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -322,9 +363,9 @@ export default function CitationsPage() {
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex-1 flex bg-cream overflow-hidden">
+    <div className="citations-print-root flex-1 flex bg-cream overflow-hidden">
       {/* Left rail — Authorities on File + Research Trail */}
-      <div className="w-64 bg-sidebar-bg border-r border-border flex flex-col flex-shrink-0">
+      <div className="citations-chrome w-64 bg-sidebar-bg border-r border-border flex flex-col flex-shrink-0">
         <div className="px-4 py-3 border-b border-border">
           <h3 className="text-[10px] font-sans font-semibold uppercase tracking-[0.15em] text-text-muted">
             Authorities on File
@@ -395,9 +436,9 @@ export default function CitationsPage() {
       </div>
 
       {/* Main column */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="citations-main-col flex-1 flex flex-col overflow-hidden">
         {/* Query bar */}
-        <div className="border-b border-border bg-white px-6 py-3 flex items-center gap-3 flex-shrink-0 relative">
+        <div className="citations-chrome border-b border-border bg-white px-6 py-3 flex items-center gap-3 flex-shrink-0 relative">
           <form onSubmit={handleSubmit} className="flex-1 flex items-center gap-2 min-w-0">
             <Search className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
             <input
@@ -438,6 +479,34 @@ export default function CitationsPage() {
                 </button>
               </div>
             ) : null}
+
+            {view.kind === 'article' && (
+              <div
+                className="flex items-center border border-border"
+                style={{ borderRadius: 0 }}
+                title="Reading size for retrieved copies"
+              >
+                <button
+                  onClick={() => stepFontSize(-1)}
+                  disabled={fontStep === 0}
+                  className="p-1.5 text-text-muted hover:text-navy disabled:opacity-30 disabled:hover:text-text-muted"
+                  title="Decrease reading size"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+                <span className="font-mono text-[10px] text-text-muted w-10 text-center">
+                  {articleFontSize}px
+                </span>
+                <button
+                  onClick={() => stepFontSize(1)}
+                  disabled={fontStep === FONT_STEPS.length - 1}
+                  className="p-1.5 text-text-muted hover:text-navy disabled:opacity-30 disabled:hover:text-text-muted"
+                  title="Increase reading size"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             {desktop && (
               <button
@@ -569,7 +638,7 @@ export default function CitationsPage() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto px-8 py-6">
+          <div className="citations-article-scroll flex-1 overflow-y-auto px-8 py-6">
             <div className="max-w-3xl mx-auto">
               {/* Masthead */}
               <div className="mb-5 pb-4 border-b border-border text-center">
@@ -694,19 +763,30 @@ export default function CitationsPage() {
                     <h2 className="flex-1 font-serif text-xl font-bold text-navy leading-snug text-center">
                       {view.article.title}
                     </h2>
-                    <button
-                      onClick={togglePin}
-                      className={`flex items-center gap-1 px-2 py-1 text-[10px] font-sans uppercase tracking-wider border transition-colors flex-shrink-0 ${
-                        isPinned
-                          ? 'bg-navy text-white border-navy'
-                          : 'text-text-muted border-border hover:text-navy'
-                      }`}
-                      style={{ borderRadius: 0 }}
-                      title={isPinned ? 'Remove from authorities on file' : 'Pin to authorities on file'}
-                    >
-                      <Pin className="w-3 h-3" />
-                      {isPinned ? 'On File' : 'Pin'}
-                    </button>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => window.print()}
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-sans uppercase tracking-wider border text-text-muted border-border hover:text-navy transition-colors"
+                        style={{ borderRadius: 0 }}
+                        title="Print a copy of this retrieved authority"
+                      >
+                        <Printer className="w-3 h-3" />
+                        Print Copy
+                      </button>
+                      <button
+                        onClick={togglePin}
+                        className={`flex items-center gap-1 px-2 py-1 text-[10px] font-sans uppercase tracking-wider border transition-colors ${
+                          isPinned
+                            ? 'bg-navy text-white border-navy'
+                            : 'text-text-muted border-border hover:text-navy'
+                        }`}
+                        style={{ borderRadius: 0 }}
+                        title={isPinned ? 'Remove from authorities on file' : 'Pin to authorities on file'}
+                      >
+                        <Pin className="w-3 h-3" />
+                        {isPinned ? 'On File' : 'Pin'}
+                      </button>
+                    </div>
                   </div>
                   <p className="text-center text-[10px] font-mono text-text-muted mb-6 break-all">
                     {view.article.url}
@@ -719,7 +799,7 @@ export default function CitationsPage() {
                       </>
                     )}
                   </p>
-                  <div className="prose-legal text-[15px]">
+                  <div className="prose-legal" style={{ fontSize: `${articleFontSize}px` }}>
                     <Markdown markdown={view.article.markdown} onLinkClick={handleLinkClick} />
                   </div>
                 </article>
