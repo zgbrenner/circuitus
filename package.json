@@ -1,8 +1,9 @@
 {
   "name": "circuitus",
   "private": true,
-  "version": "2.7.0",
+  "version": "2.8.0",
   "type": "module",
+  "main": "electron/main.mjs",
   "engines": {
     "node": ">=22"
   },
@@ -11,6 +12,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "desktop": "npm run build && electron .",
+    "desktop:dev": "electron . --dev-server=http://localhost:5173",
     "postinstall": "node scripts/copy-pdf-worker.mjs"
   },
   "dependencies": {
@@ -41,6 +44,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.20",
+    "electron": "^43.4.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",

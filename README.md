@@ -79,6 +79,28 @@ Real statutory citations throughout.
 
 ---
 
+## Citations Desk
+
+The **Citations** tab is a research terminal for external authorities: query the open web and retrieve any article as a typeset, memo-style document — masthead, justified serif, table-of-authorities numbering. Retrieval goes through a configurable text-extraction endpoint (default: Jina Reader) so pages arrive as clean text, never as third-party markup. Pin authorities to keep them on file; your research trail is kept per session.
+
+Running the desktop app? The Citations desk gains a **Live Session** mode — a real embedded browser inside the Circuitus chrome.
+
+## Exhibit Compiler
+
+The **Exhibits** tab is a full multi-file code workspace (Monaco — the editor engine behind VS Code) dressed as an exhibit annexing system. Files persist locally in IndexedDB, languages are auto-detected, and imports/exports work with plain files on disk. The **Instrument View** toggle instantly swaps the editor for a practice-guide document; the global quick-reference chord covers this tab like every other.
+
+## Desktop App
+
+An optional Electron shell (`npm run desktop`) wraps the suite in a native window:
+
+- **Real embedded browsing** in the Citations desk (no proxy, no iframe limits)
+- **System-wide vanish hotkey** — <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd> hides the entire window from anywhere, even when Circuitus isn't focused; press again to restore
+- Same local-only storage; nothing changes about where your data lives
+
+See [`electron/README.md`](electron/README.md) for details.
+
+---
+
 ## Quick Reference Mode
 
 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd> instantly switches the entire UI to display a practice guide on SOW structuring. Your previous state is saved and restored when you press the shortcut again.

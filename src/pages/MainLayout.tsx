@@ -19,6 +19,8 @@ const AuthoritiesFeedPage = lazy(() => import('@/pages/AuthoritiesFeedPage'));
 const CompliancePage = lazy(() => import('@/pages/CompliancePage'));
 const AudioLibraryPage = lazy(() => import('@/pages/AudioLibraryPage'));
 const ModelsPage = lazy(() => import('@/pages/ModelsPage'));
+const CitationsPage = lazy(() => import('@/pages/CitationsPage'));
+const ExhibitsPage = lazy(() => import('@/pages/ExhibitsPage'));
 const AssistantPanel = lazy(() => import('@/components/AssistantPanel'));
 
 function PageFallback() {
@@ -799,6 +801,14 @@ export default function MainLayout({ onLogout }: MainLayoutProps) {
         ) : activeNav === 'Models' ? (
           <Suspense fallback={<PageFallback />}>
             <ModelsPage />
+          </Suspense>
+        ) : activeNav === 'Citations' ? (
+          <Suspense fallback={<PageFallback />}>
+            <CitationsPage />
+          </Suspense>
+        ) : activeNav === 'Exhibits' ? (
+          <Suspense fallback={<PageFallback />}>
+            <ExhibitsPage />
           </Suspense>
         ) : isReading ? (
           <ContentArea

@@ -77,6 +77,17 @@ export interface SpreadsheetWorkbook {
   updatedAt: string;
 }
 
+export interface CodeFile {
+  id: string;
+  /** Filename with extension, e.g. "scratch.ts". */
+  name: string;
+  /** Monaco language id, derived from the filename extension. */
+  language: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AudioTrack {
   id: string;
   title: string;
