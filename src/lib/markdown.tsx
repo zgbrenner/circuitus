@@ -63,17 +63,31 @@ function safeHttpUrl(raw: string): string | null {
   }
 }
 
-/** Convert autolinks to markdown links, then strip any remaining raw HTML. */
-function prepInline(text: string): string {
-  let s = text.replace(/<(https?:\/\/[^>\s]+)>/g, '[$1]($1)');
-  // Strip tags/comments repeatedly until stable: a single pass can leave a
-  // dangerous substring behind when removal reassembles one (e.g.
-  // `<<x>script>` → one pass leaves `<script>`). Output is only ever placed
-  // in React text nodes, so this is defense in depth, not the last line.
+/**
+ * Strip every match repeatedly until the string stops changing — a single
+ * pass can leave a dangerous substring behind when removal reassembles one
+ * (e.g. `<<x>script>` → one pass leaves `<script>`).
+ */
+function stripToFixpoint(s: string, re: RegExp): string {
   let prev: string;
   do {
     prev = s;
-    s = s.replace(/<\/?[a-zA-Z][^>]*>/g, '').replace(/<!--[\s\S]*?-->/g, '');
+    s = s.replace(re, '');
+  } while (s !== prev);
+  return s;
+}
+
+/** Convert autolinks to markdown links, then strip any remaining raw HTML. */
+function prepInline(text: string): string {
+  let s = text.replace(/<(https?:\/\/[^>\s]+)>/g, '[$1]($1)');
+  // Alternate tag and comment stripping until jointly stable, since removing
+  // one kind can reassemble the other. Output is only ever placed in React
+  // text nodes, so this is defense in depth, not the last line.
+  let prev: string;
+  do {
+    prev = s;
+    s = stripToFixpoint(s, /<\/?[a-zA-Z][^>]*>/g);
+    s = stripToFixpoint(s, /<!--[\s\S]*?-->/g);
   } while (s !== prev);
   // Anything tag-like that survives (e.g. an unterminated `<script` with no
   // closing bracket) loses its bracket, so no tag-shaped sequence remains.
