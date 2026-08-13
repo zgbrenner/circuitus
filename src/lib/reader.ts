@@ -112,7 +112,9 @@ function stripToFixpoint(s: string, re: RegExp): string {
     prev = s;
     s = s.replace(re, '');
   } while (s !== prev);
-  return s;
+  // Anything tag-like that survives (e.g. an unterminated `<script` with no
+  // closing bracket) loses its bracket, so no tag-shaped sequence remains.
+  return s.replace(/<(?=[a-zA-Z/!])/g, '');
 }
 
 /** Flatten markdown/HTML decoration out of a text fragment. */

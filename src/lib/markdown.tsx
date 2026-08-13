@@ -75,7 +75,9 @@ function prepInline(text: string): string {
     prev = s;
     s = s.replace(/<\/?[a-zA-Z][^>]*>/g, '').replace(/<!--[\s\S]*?-->/g, '');
   } while (s !== prev);
-  return s;
+  // Anything tag-like that survives (e.g. an unterminated `<script` with no
+  // closing bracket) loses its bracket, so no tag-shaped sequence remains.
+  return s.replace(/<(?=[a-zA-Z/!])/g, '');
 }
 
 // ── Inline parsing ───────────────────────────────────────────────────────
