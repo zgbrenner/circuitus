@@ -216,6 +216,23 @@ export default function CitationsPage() {
 
   const handleLinkClick = useCallback((url: string) => openArticle(url), [openArticle]);
 
+  // Handoff from the Dockets page: it writes a URL to localStorage and asks
+  // the layout to switch here; consume the pending retrieval once on mount.
+  useEffect(() => {
+    let pending: string | null = null;
+    try {
+      pending = localStorage.getItem('circuitus_pending_retrieval');
+      if (pending) localStorage.removeItem('circuitus_pending_retrieval');
+    } catch {
+      return;
+    }
+    if (!pending || !/^https?:\/\//i.test(pending)) return;
+    // Defer past the mount commit so the retrieval doesn't cascade renders.
+    const url = pending;
+    const t = window.setTimeout(() => openArticle(url), 0);
+    return () => window.clearTimeout(t);
+  }, [openArticle]);
+
   function goStep(delta: number) {
     const target = trailState.index + delta;
     if (target < 0 || target >= trailState.entries.length) return;

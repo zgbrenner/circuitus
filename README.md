@@ -89,6 +89,14 @@ Running the desktop app? The Citations desk gains a **Live Session** mode — a 
 
 The **Exhibits** tab is a full multi-file code workspace (Monaco — the editor engine behind VS Code) dressed as an exhibit annexing system. Files persist locally in IndexedDB, languages are auto-detected, and imports/exports work with plain files on disk. The **Instrument View** toggle instantly swaps the editor for a practice-guide document; the global quick-reference chord covers this tab like every other.
 
+## Docket Alerts
+
+The **Dockets** tab is a feed reader in a robe: subscribe to subreddits or any RSS/Atom feed and read them as filing activity — docket numbers, court-styled sources, citation counts. Items open in-app through the Citations reader, so following a story never leaves the suite.
+
+## Matter Management
+
+The **Matters** tab is a real kanban board (Pending Review → In Preparation → Filed & Closed) with drag-and-drop, plus a **Timekeeper** that records time against matters in 6-minute billing increments. Use it for actual personal tasks — it just happens to look like docket management.
+
 ## Deposition Review
 
 The **Depositions** tab is a video room dressed as certified-recording review: lodge YouTube links or direct media URLs, or import video files (stored locally in IndexedDB). Each recording gets a transcript-style case caption, and **Compact Review** docks the player into a small corner panel while the main pane shows an errata sheet — playback never restarts.

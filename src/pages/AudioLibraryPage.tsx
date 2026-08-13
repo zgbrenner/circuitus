@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Headphones, Play, Pause, Plus, Trash2, Link as LinkIcon, Upload } from 'lucide-react';
+import { Headphones, Play, Pause, Plus, Trash2, Link as LinkIcon, Upload, Waves } from 'lucide-react';
 import { deleteTrack, getAllTracks, saveTrack } from '@/lib/storage';
 import type { AudioTrack } from '@/types';
 
@@ -44,6 +44,93 @@ function safeMediaUrl(input: string): string | null {
   }
 }
 
+/* ── Sound masking ───────────────────────────────────────────────────
+   Pure-WebAudio noise generators (no assets): white / pink / brown,
+   looped from a generated AudioBuffer through a master GainNode and a
+   gentle lowpass (brown only). One generator active at a time. */
+
+type NoiseKind = 'white' | 'pink' | 'brown';
+
+const MASKING_STORAGE_KEY = 'circuitus_masking';
+
+const NOISE_OPTIONS: ReadonlyArray<{ kind: NoiseKind; label: string; sublabel: string }> = [
+  { kind: 'white', label: 'White', sublabel: 'Open-plan masking' },
+  { kind: 'pink', label: 'Pink', sublabel: 'Focus — broadband' },
+  { kind: 'brown', label: 'Brown', sublabel: 'Deep focus — low band' },
+];
+
+/** Perceptual level trim so the three generators sit at similar loudness. */
+const NOISE_TRIM: Record<NoiseKind, number> = { white: 0.25, pink: 0.4, brown: 0.55 };
+
+interface MaskingPrefs {
+  kind: NoiseKind;
+  volume: number;
+}
+
+function loadMaskingPrefs(): MaskingPrefs {
+  try {
+    const raw = localStorage.getItem(MASKING_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<MaskingPrefs>;
+      const kind =
+        parsed.kind === 'white' || parsed.kind === 'pink' || parsed.kind === 'brown'
+          ? parsed.kind
+          : 'pink';
+      const volume =
+        typeof parsed.volume === 'number' && Number.isFinite(parsed.volume)
+          ? Math.min(100, Math.max(0, Math.round(parsed.volume)))
+          : 30;
+      return { kind, volume };
+    }
+  } catch {
+    /* corrupted prefs — fall through to defaults */
+  }
+  return { kind: 'pink', volume: 30 };
+}
+
+function maskGainValue(kind: NoiseKind, volume: number): number {
+  return (volume / 100) * NOISE_TRIM[kind];
+}
+
+function buildNoiseBuffer(ctx: AudioContext, kind: NoiseKind): AudioBuffer {
+  const seconds = 4;
+  const rate = ctx.sampleRate;
+  const buffer = ctx.createBuffer(1, rate * seconds, rate);
+  const data = buffer.getChannelData(0);
+  if (kind === 'white') {
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  } else if (kind === 'pink') {
+    // Paul Kellet's economy pink-noise filter over white noise.
+    let b0 = 0;
+    let b1 = 0;
+    let b2 = 0;
+    let b3 = 0;
+    let b4 = 0;
+    let b5 = 0;
+    let b6 = 0;
+    for (let i = 0; i < data.length; i++) {
+      const white = Math.random() * 2 - 1;
+      b0 = 0.99886 * b0 + white * 0.0555179;
+      b1 = 0.99332 * b1 + white * 0.0750759;
+      b2 = 0.969 * b2 + white * 0.153852;
+      b3 = 0.8665 * b3 + white * 0.3104856;
+      b4 = 0.55 * b4 + white * 0.5329522;
+      b5 = -0.7616 * b5 - white * 0.016898;
+      data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+      b6 = white * 0.115926;
+    }
+  } else {
+    // Brown: leaky integration of white noise.
+    let last = 0;
+    for (let i = 0; i < data.length; i++) {
+      const white = Math.random() * 2 - 1;
+      last = (last + 0.02 * white) / 1.02;
+      data[i] = last * 3.5;
+    }
+  }
+  return buffer;
+}
+
 async function probeDuration(src: string): Promise<number> {
   const safe = safeMediaUrl(src);
   if (!safe) return 0;
@@ -68,9 +155,132 @@ export default function AudioLibraryPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
+  // Sound-masking state — last-used generator/volume persisted to localStorage.
+  const [maskKind, setMaskKind] = useState<NoiseKind>(() => loadMaskingPrefs().kind);
+  const [maskVolume, setMaskVolume] = useState<number>(() => loadMaskingPrefs().volume);
+  const [maskActive, setMaskActive] = useState(false);
+  const maskCtxRef = useRef<AudioContext | null>(null);
+  const maskGainRef = useRef<GainNode | null>(null);
+  const maskFilterRef = useRef<BiquadFilterNode | null>(null);
+  const maskSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const maskStopTimerRef = useRef<number | null>(null);
+
   useEffect(() => {
     void getAllTracks().then(setTracks);
   }, []);
+
+  // Persist masking preferences across sessions.
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        MASKING_STORAGE_KEY,
+        JSON.stringify({ kind: maskKind, volume: maskVolume }),
+      );
+    } catch {
+      /* storage unavailable — theatre continues without persistence */
+    }
+  }, [maskKind, maskVolume]);
+
+  // Tear down WebAudio on unmount.
+  useEffect(() => {
+    return () => {
+      if (maskStopTimerRef.current !== null) window.clearTimeout(maskStopTimerRef.current);
+      if (maskSourceRef.current) {
+        try {
+          maskSourceRef.current.stop();
+        } catch {
+          /* already stopped */
+        }
+      }
+      if (maskCtxRef.current) void maskCtxRef.current.close().catch(() => undefined);
+    };
+  }, []);
+
+  /** Start (or switch) a generator. Only ever called from a click handler,
+   *  so AudioContext creation/resume satisfies the autoplay policy. */
+  function startMasking(kind: NoiseKind) {
+    let ctx = maskCtxRef.current;
+    if (!ctx) {
+      ctx = new AudioContext();
+      maskCtxRef.current = ctx;
+    }
+    void ctx.resume().catch(() => undefined);
+    if (maskStopTimerRef.current !== null) {
+      window.clearTimeout(maskStopTimerRef.current);
+      maskStopTimerRef.current = null;
+    }
+    if (maskSourceRef.current) {
+      try {
+        maskSourceRef.current.stop();
+      } catch {
+        /* already stopped */
+      }
+      maskSourceRef.current.disconnect();
+      maskSourceRef.current = null;
+    }
+    if (!maskGainRef.current) {
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      gain.connect(ctx.destination);
+      maskGainRef.current = gain;
+    }
+    if (!maskFilterRef.current) {
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.connect(maskGainRef.current);
+      maskFilterRef.current = filter;
+    }
+    const gain = maskGainRef.current;
+    const filter = maskFilterRef.current;
+    // Gentle low band for brown; effectively transparent for white/pink.
+    filter.frequency.value = kind === 'brown' ? 900 : 18000;
+    const source = ctx.createBufferSource();
+    source.buffer = buildNoiseBuffer(ctx, kind);
+    source.loop = true;
+    source.connect(filter);
+    const now = ctx.currentTime;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(maskGainValue(kind, maskVolume), now + 0.3);
+    source.start();
+    maskSourceRef.current = source;
+    setMaskKind(kind);
+    setMaskActive(true);
+  }
+
+  /** Fade out ~300ms, then stop the source and suspend the context. */
+  function stopMasking() {
+    setMaskActive(false);
+    const ctx = maskCtxRef.current;
+    const gain = maskGainRef.current;
+    const source = maskSourceRef.current;
+    if (!ctx || !gain || !source) return;
+    const now = ctx.currentTime;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(gain.gain.value, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.3);
+    maskSourceRef.current = null;
+    maskStopTimerRef.current = window.setTimeout(() => {
+      try {
+        source.stop();
+      } catch {
+        /* already stopped */
+      }
+      source.disconnect();
+      void ctx.suspend().catch(() => undefined);
+      maskStopTimerRef.current = null;
+    }, 350);
+  }
+
+  function handleMaskVolume(volume: number) {
+    setMaskVolume(volume);
+    const ctx = maskCtxRef.current;
+    const gain = maskGainRef.current;
+    if (ctx && gain && maskSourceRef.current) {
+      gain.gain.cancelScheduledValues(ctx.currentTime);
+      gain.gain.setTargetAtTime(maskGainValue(maskKind, volume), ctx.currentTime, 0.05);
+    }
+  }
 
   // Maintain blob URLs for any track whose source is a blob.
   useEffect(() => {
@@ -208,6 +418,72 @@ export default function AudioLibraryPage() {
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className="max-w-4xl mx-auto">
+          {/* Sound masking — WebAudio noise generators, no assets */}
+          <div
+            className="bg-white p-4 mb-6 shadow-sheet"
+            style={{ border: '1px solid #D9D2C0', borderRadius: 0 }}
+          >
+            <div className="flex items-start justify-between gap-4 mb-3">
+              <div>
+                <p className="kicker-brass">Sound Masking</p>
+                <p className="font-display text-[13px] font-semibold text-ink leading-tight">
+                  Privileged-Conversation Masking &amp; Focus
+                </p>
+              </div>
+              <Waves className="w-4 h-4 text-brass flex-shrink-0 mt-0.5" />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {NOISE_OPTIONS.map((opt) => {
+                const isOn = maskActive && maskKind === opt.kind;
+                return (
+                  <button
+                    key={opt.kind}
+                    onClick={() => (isOn ? stopMasking() : startMasking(opt.kind))}
+                    className={`text-left px-3 py-1.5 transition-colors ${
+                      isOn ? 'bg-brass text-white' : 'bg-paper-cool text-ink hover:text-navy'
+                    }`}
+                    style={{
+                      borderRadius: 0,
+                      border: `1px solid ${isOn ? '#9C7A1F' : '#D9D2C0'}`,
+                    }}
+                    aria-pressed={isOn}
+                  >
+                    <span className="block text-[10px] font-sans font-semibold uppercase tracking-[0.15em]">
+                      {opt.label}
+                    </span>
+                    <span
+                      className={`block text-[9px] font-mono ${
+                        isOn ? 'text-white/80' : 'text-ink-muted'
+                      }`}
+                    >
+                      {opt.sublabel}
+                    </span>
+                  </button>
+                );
+              })}
+              <div className="flex items-center gap-2 ml-auto flex-1 min-w-[150px] max-w-[240px]">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={maskVolume}
+                  onChange={(e) => handleMaskVolume(parseInt(e.target.value, 10))}
+                  className="audio-seek flex-1 h-1 cursor-pointer"
+                  aria-label="Masking volume"
+                />
+                <span className="font-mono text-[10px] text-ink-muted tabular-nums w-8 text-right">
+                  {maskVolume}%
+                </span>
+              </div>
+            </div>
+            {maskActive && (
+              <p className="mt-2.5 text-[10px] font-mono text-brass-dim">
+                Masking active — {maskKind} · {maskVolume}%
+              </p>
+            )}
+          </div>
+
           {tracks.length === 0 ? (
             <div className="text-center py-16">
               <Headphones className="w-12 h-12 text-border mx-auto mb-4" />
