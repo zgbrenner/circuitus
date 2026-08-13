@@ -3,8 +3,12 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
-import { FileText, Plus, Trash2, Type, Focus, Pencil, GitCompare, Pen } from 'lucide-react';
-import { DRAFT_TEMPLATES, type DraftTemplate } from '@/data/draft-templates';
+import { AudioLines, FileText, Plus, Trash2, Type, Focus, Pencil, GitCompare, Pen } from 'lucide-react';
+import {
+  DRAFT_TEMPLATES,
+  DICTATION_POOL_TEMPLATES,
+  type DraftTemplate,
+} from '@/data/draft-templates';
 import { deleteDraft, getAllDrafts, getDraft, saveDraft } from '@/lib/storage';
 import type { Draft } from '@/types';
 import DraftDiagram from '@/components/DraftDiagram';
@@ -13,6 +17,223 @@ import DraftCompare from '@/components/DraftCompare';
 type Mode = 'edit' | 'compare' | 'diagram';
 
 const SAVE_DEBOUNCE_MS = 700;
+
+/* ── Dictation playback ──────────────────────────────────────────────
+   A purely presentational "transcription" performance. It renders into
+   its own overlay div and never touches the Tiptap editor or any saved
+   draft — toggling it off restores the real editor instantly. */
+
+/**
+ * Strip every tag repeatedly until the string stops changing — a single
+ * pass can leave a tag behind when removal reassembles one (e.g.
+ * `<<x>script>`) — then drop residual tag-open brackets so no tag-shaped
+ * sequence survives. Output only ever lands in React text nodes.
+ */
+function stripTags(s: string): string {
+  let prev: string;
+  do {
+    prev = s;
+    s = s.replace(/<[^>]+>/g, '');
+  } while (s !== prev);
+  return s.replace(/<(?=[a-zA-Z/!])/g, '');
+}
+
+/** Strip template HTML down to plain-text paragraphs for the typing pool. */
+function htmlToParagraphs(html: string): string[] {
+  return stripTags(
+    html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(?:p|h[1-6]|li|blockquote)>/gi, '\n'),
+  )
+    // Decode entities with &amp; LAST, so "&amp;lt;" yields the literal
+    // text "&lt;" instead of being double-unescaped to "<".
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter((line) => line.length > 3 && !/^\[.*\]$/.test(line));
+}
+
+function buildDictationParagraphs(): string[] {
+  const pool: string[] = [];
+  for (const t of [...DRAFT_TEMPLATES, ...DICTATION_POOL_TEMPLATES]) {
+    if (t.id === 'blank') continue;
+    pool.push(...htmlToParagraphs(t.body));
+  }
+  return pool;
+}
+
+/** Format seconds as hh:mm:ss for the session status line. */
+function formatSession(totalSec: number): string {
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+
+/** Delay ~60–140ms, gaussian-ish (mean of two uniforms). */
+function keyDelay(): number {
+  return 60 + ((Math.random() + Math.random()) / 2) * 80;
+}
+
+function DictationOverlay({ onEnd }: { onEnd: () => void }) {
+  const [typed, setTyped] = useState('');
+  const [segment, setSegment] = useState(1);
+  const [elapsed, setElapsed] = useState(4 * 60 + 12); // resumes mid-session
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<number | null>(null);
+
+  // Session clock
+  useEffect(() => {
+    const id = window.setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Typing engine — a single self-rescheduling setTimeout chain.
+  useEffect(() => {
+    const paras = buildDictationParagraphs();
+    if (paras.length === 0) return;
+    let cancelled = false;
+    let segmentNum = 1;
+    let script = `SEGMENT 1\n${paras.join('\n')}`;
+    let pos = 0;
+    let sinceTypo = 0;
+    let typoAt = 80 + Math.floor(Math.random() * 41); // ~1 per 80–120 chars
+
+    const schedule = (delay: number, fn: () => void) => {
+      timerRef.current = window.setTimeout(() => {
+        if (!cancelled) fn();
+      }, delay);
+    };
+
+    const backspace = (n: number) => {
+      if (n <= 0) {
+        schedule(120 + Math.random() * 120, typeChar);
+        return;
+      }
+      setTyped((t) => t.slice(0, -1));
+      schedule(55 + Math.random() * 45, () => backspace(n - 1));
+    };
+
+    const typeWrong = (wrong: string, i: number) => {
+      if (i >= wrong.length) {
+        // Notice the mistake, hesitate, then correct it.
+        schedule(280 + Math.random() * 140, () => backspace(wrong.length));
+        return;
+      }
+      setTyped((t) => t + wrong[i]);
+      schedule(keyDelay(), () => typeWrong(wrong, i + 1));
+    };
+
+    const typeChar = () => {
+      if (pos >= script.length) {
+        segmentNum += 1;
+        setSegment(segmentNum);
+        const shuffled = [...paras].sort(() => Math.random() - 0.5);
+        script = `\nSEGMENT ${segmentNum}\n${shuffled.join('\n')}`;
+        pos = 0;
+      }
+      const ch = script[pos];
+      if (sinceTypo >= typoAt && /[a-zA-Z]/.test(ch)) {
+        sinceTypo = 0;
+        typoAt = 80 + Math.floor(Math.random() * 41);
+        const len = 2 + Math.floor(Math.random() * 3);
+        let wrong = '';
+        for (let i = 0; i < len; i++) {
+          wrong += 'aeionrstlu'[Math.floor(Math.random() * 10)];
+        }
+        typeWrong(wrong, 0);
+        return;
+      }
+      pos += 1;
+      sinceTypo += 1;
+      setTyped((t) => t + ch);
+      const next: string | undefined = script[pos];
+      let delay = keyDelay();
+      if (ch === '\n') {
+        delay = 500 + Math.random() * 700; // paragraph break
+      } else if ('.!?'.includes(ch) && (next === ' ' || next === '\n' || next === undefined)) {
+        delay = 400 + Math.random() * 800; // sentence end
+      } else if ((ch === ',' || ch === ';' || ch === ':') && next === ' ') {
+        delay = 180 + Math.random() * 260; // clause pause
+      } else if (ch === ' ' && Math.random() < 0.03) {
+        delay = 220 + Math.random() * 380; // occasional word-boundary hesitation
+      }
+      schedule(delay, typeChar);
+    };
+
+    schedule(450, typeChar);
+    return () => {
+      cancelled = true;
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  // Soft auto-scroll — keep the caret in view unless the reader scrolled up.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom < 240) el.scrollTop = el.scrollHeight;
+  }, [typed]);
+
+  const paragraphs = typed.split('\n');
+
+  return (
+    <div className="absolute inset-0 z-40 bg-white flex flex-col">
+      <div className="border-b border-border px-6 py-2 flex items-center justify-between flex-shrink-0 gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="dictation-rec-dot" aria-hidden="true" />
+            <span className="text-[10px] font-mono font-semibold text-claret tracking-[0.15em]">
+              REC
+            </span>
+          </span>
+          <p className="font-serif text-base text-navy truncate">
+            Memorandum — Dictated Draft (Transcribing…)
+          </p>
+        </div>
+        <span className="text-[10px] font-mono text-text-muted/70 whitespace-nowrap">
+          Dictation session · segment {segment} · {formatSession(elapsed)}
+        </span>
+        <button
+          onClick={onEnd}
+          className="flex items-center gap-1 px-2 py-1 text-[10px] font-sans uppercase tracking-wider border border-border rounded text-text-muted hover:text-navy hover:border-navy transition-colors flex-shrink-0"
+        >
+          <AudioLines className="w-3 h-3" /> End Dictation
+        </button>
+      </div>
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-12 py-10">
+        <div className="max-w-reading-pane mx-auto prose-legal dictation-doc">
+          {paragraphs.map((para, i) => {
+            const isLast = i === paragraphs.length - 1;
+            const caret = isLast ? (
+              <span className="dictation-caret" aria-hidden="true" />
+            ) : null;
+            if (/^SEGMENT \d+$/.test(para)) {
+              return (
+                <h2 key={i}>
+                  {para}
+                  {caret}
+                </h2>
+              );
+            }
+            return (
+              <p key={i}>
+                {para}
+                {caret}
+              </p>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function newDraftFromTemplate(t: DraftTemplate): Draft {
   const now = new Date().toISOString();
@@ -35,6 +256,7 @@ export default function TemplatesPage() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [typewriterMode, setTypewriterMode] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [dictationMode, setDictationMode] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextSaveRef = useRef(true);
   const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -275,6 +497,8 @@ export default function TemplatesPage() {
           </div>
         )}
 
+        {dictationMode && <DictationOverlay onEnd={() => setDictationMode(false)} />}
+
         {activeDraft ? (
           <>
             <div className="border-b border-border px-6 py-2 flex items-center justify-between flex-shrink-0 gap-3">
@@ -331,6 +555,16 @@ export default function TemplatesPage() {
                     title="Focus mode (dims surrounding paragraphs)"
                   >
                     <Focus className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setDictationMode((p) => !p)}
+                    className={`flex items-center gap-1 p-1.5 rounded ${
+                      dictationMode ? 'text-claret bg-cream' : 'text-text-muted hover:text-text-main'
+                    }`}
+                    title="Dictation playback (transcribes the recorded dictation session)"
+                  >
+                    <AudioLines className="w-3.5 h-3.5" />
+                    <span className="smcp font-sans text-[11px]">Dictation</span>
                   </button>
                 </div>
               )}

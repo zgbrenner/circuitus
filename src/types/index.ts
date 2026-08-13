@@ -117,6 +117,23 @@ export interface MatterNote {
   updatedAt: string;
 }
 
+export type MatterStage = 'pending' | 'preparation' | 'filed';
+
+export interface MatterCard {
+  id: string;
+  title: string;
+  notes: string;
+  stage: MatterStage;
+  /** fake docket-style number assigned at creation, e.g. "M-2026-0147" */
+  matterNumber: string;
+  /** total tracked seconds from the Timekeeper */
+  billedSeconds: number;
+  /** manual ordering within a stage column (ascending) */
+  order: number;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+}
+
 export interface StandinDocument {
   id: string;
   type: 'guide' | 'article' | 'case';

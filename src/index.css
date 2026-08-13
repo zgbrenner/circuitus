@@ -588,3 +588,41 @@
     background: #fff !important;
   }
 }
+
+/* ── Dictation playback (Templates page) ───────────────────────────
+   Overlay-only theatre: block caret, pulsing REC glyph, and body copy
+   sized to match the Tiptap editor surface exactly. */
+.dictation-doc {
+  font-size: 15px;
+  line-height: 1.78;
+  font-feature-settings: "onum", "liga", "kern";
+}
+
+.dictation-caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 1.02em;
+  margin-left: 1px;
+  background: #0E1116;
+  vertical-align: text-bottom;
+  animation: dictation-caret-blink 1.06s steps(1, end) infinite;
+}
+
+@keyframes dictation-caret-blink {
+  0%, 54% { opacity: 1; }
+  55%, 100% { opacity: 0; }
+}
+
+.dictation-rec-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7A1E2E;
+  animation: dictation-rec-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes dictation-rec-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(122, 30, 46, 0.35); }
+  50% { opacity: 0.35; box-shadow: 0 0 0 4px rgba(122, 30, 46, 0); }
+}

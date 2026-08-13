@@ -10,6 +10,7 @@ import type {
   SpreadsheetWorkbook,
   CodeFile,
   DepositionVideo,
+  MatterCard,
 } from '@/types';
 
 interface CircuitusDB {
@@ -74,13 +75,20 @@ interface CircuitusDB {
       'by-addedAt': string;
     };
   };
+  matters: {
+    key: string;
+    value: MatterCard;
+    indexes: {
+      'by-updatedAt': string;
+    };
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<CircuitusDB>> | null = null;
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<CircuitusDB>('circuitus-db', 7, {
+    dbPromise = openDB<CircuitusDB>('circuitus-db', 8, {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
           const docStore = db.createObjectStore('documents', { keyPath: 'id' });
@@ -115,6 +123,10 @@ function getDB() {
         if (oldVersion < 7) {
           const videoStore = db.createObjectStore('videos', { keyPath: 'id' });
           videoStore.createIndex('by-addedAt', 'addedAt');
+        }
+        if (oldVersion < 8) {
+          const matterStore = db.createObjectStore('matters', { keyPath: 'id' });
+          matterStore.createIndex('by-updatedAt', 'updatedAt');
         }
       },
     });
@@ -295,6 +307,32 @@ export async function getAllVideos(): Promise<DepositionVideo[]> {
 export async function deleteVideo(id: string): Promise<void> {
   const db = await getDB();
   await db.delete('videos', id);
+}
+
+// Matters (Matters tab — workflow board + Timekeeper)
+const MATTER_STAGE_RANK: Record<MatterCard['stage'], number> = {
+  pending: 0,
+  preparation: 1,
+  filed: 2,
+};
+
+export async function saveMatter(matter: MatterCard): Promise<void> {
+  const db = await getDB();
+  await db.put('matters', matter);
+}
+
+export async function getAllMatters(): Promise<MatterCard[]> {
+  const db = await getDB();
+  const all = await db.getAll('matters');
+  return all.sort(
+    (a: MatterCard, b: MatterCard) =>
+      MATTER_STAGE_RANK[a.stage] - MATTER_STAGE_RANK[b.stage] || a.order - b.order,
+  );
+}
+
+export async function deleteMatter(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete('matters', id);
 }
 
 // Spreadsheet workbooks

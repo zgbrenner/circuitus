@@ -22,6 +22,8 @@ const ModelsPage = lazy(() => import('@/pages/ModelsPage'));
 const CitationsPage = lazy(() => import('@/pages/CitationsPage'));
 const ExhibitsPage = lazy(() => import('@/pages/ExhibitsPage'));
 const DepositionsPage = lazy(() => import('@/pages/DepositionsPage'));
+const DocketsPage = lazy(() => import('@/pages/DocketsPage'));
+const MattersPage = lazy(() => import('@/pages/MattersPage'));
 const AssistantPanel = lazy(() => import('@/components/AssistantPanel'));
 
 function PageFallback() {
@@ -73,6 +75,20 @@ interface MainLayoutProps {
 
 export default function MainLayout({ onLogout }: MainLayoutProps) {
   const [activeNav, setActiveNav] = useState('Practice Guides');
+
+  // Dockets → Citations handoff: a docket item stores its URL (localStorage
+  // key circuitus_pending_retrieval) then fires this event; switching tabs
+  // mounts CitationsPage, which consumes the pending URL.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      // preventDefault signals "handled" — the dispatcher falls back to
+      // opening the URL externally when nobody claims the event.
+      e.preventDefault();
+      setActiveNav('Citations');
+    };
+    window.addEventListener('circuitus:read-authority', handler);
+    return () => window.removeEventListener('circuitus:read-authority', handler);
+  }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [fontSize, setFontSize] = useState(14.5);
   const [showParagraphNumbers, setShowParagraphNumbers] = useState(false);
@@ -815,6 +831,14 @@ export default function MainLayout({ onLogout }: MainLayoutProps) {
         ) : activeNav === 'Depositions' ? (
           <Suspense fallback={<PageFallback />}>
             <DepositionsPage />
+          </Suspense>
+        ) : activeNav === 'Dockets' ? (
+          <Suspense fallback={<PageFallback />}>
+            <DocketsPage />
+          </Suspense>
+        ) : activeNav === 'Matters' ? (
+          <Suspense fallback={<PageFallback />}>
+            <MattersPage />
           </Suspense>
         ) : isReading ? (
           <ContentArea
