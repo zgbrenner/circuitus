@@ -38,6 +38,9 @@ export default function ShortcutsOverlay({ open, onClose, quickRefChord }: Short
       title: 'Cover & Privacy',
       rows: [
         { keys: [quickRefChord], label: 'Toggle Quick Reference Mode' },
+        ...(typeof window !== 'undefined' && window.circuitusDesktop
+          ? [{ keys: ['Ctrl', 'Shift', 'H'], label: 'Vanish window (system-wide)' }]
+          : []),
         { keys: ['?'], label: 'Open this keybinding sheet' },
       ],
     },

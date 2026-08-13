@@ -8,6 +8,7 @@ import type {
   Draft,
   AudioTrack,
   SpreadsheetWorkbook,
+  CodeFile,
 } from '@/types';
 
 interface CircuitusDB {
@@ -58,13 +59,20 @@ interface CircuitusDB {
       'by-updatedAt': string;
     };
   };
+  codefiles: {
+    key: string;
+    value: CodeFile;
+    indexes: {
+      'by-updatedAt': string;
+    };
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<CircuitusDB>> | null = null;
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<CircuitusDB>('circuitus-db', 5, {
+    dbPromise = openDB<CircuitusDB>('circuitus-db', 6, {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
           const docStore = db.createObjectStore('documents', { keyPath: 'id' });
@@ -91,6 +99,10 @@ function getDB() {
         if (oldVersion < 5) {
           const wbStore = db.createObjectStore('workbooks', { keyPath: 'id' });
           wbStore.createIndex('by-updatedAt', 'updatedAt');
+        }
+        if (oldVersion < 6) {
+          const cfStore = db.createObjectStore('codefiles', { keyPath: 'id' });
+          cfStore.createIndex('by-updatedAt', 'updatedAt');
         }
       },
     });
@@ -232,6 +244,28 @@ export async function getAllTracks(): Promise<AudioTrack[]> {
 export async function deleteTrack(id: string): Promise<void> {
   const db = await getDB();
   await db.delete('tracks', id);
+}
+
+// Code files (Exhibits tab — Exhibit Compiler workspace)
+export async function saveCodeFile(file: CodeFile): Promise<void> {
+  const db = await getDB();
+  await db.put('codefiles', file);
+}
+
+export async function getCodeFile(id: string): Promise<CodeFile | undefined> {
+  const db = await getDB();
+  return db.get('codefiles', id);
+}
+
+export async function getAllCodeFiles(): Promise<CodeFile[]> {
+  const db = await getDB();
+  const all = await db.getAll('codefiles');
+  return all.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function deleteCodeFile(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete('codefiles', id);
 }
 
 // Spreadsheet workbooks

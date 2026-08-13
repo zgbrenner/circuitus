@@ -1,40 +1,11 @@
 import { useMemo, useState } from 'react';
-import { DiffEditor, type Monaco } from '@monaco-editor/react';
+import { DiffEditor } from '@monaco-editor/react';
+import { defineCircuitusTheme, ensureMonacoSetup } from '@/lib/monaco';
 import type { Draft } from '@/types';
 
-function defineCircuitusTheme(monaco: Monaco) {
-  monaco.editor.defineTheme('circuitus-light', {
-    base: 'vs',
-    inherit: true,
-    rules: [
-      { token: '', foreground: '0E1116', background: 'F5F1E8' },
-      { token: 'comment', foreground: '5A6373', fontStyle: 'italic' },
-    ],
-    colors: {
-      'editor.background': '#F5F1E8',
-      'editor.foreground': '#0E1116',
-      'editorLineNumber.foreground': '#B5AB95',
-      'editorLineNumber.activeForeground': '#9C7A1F',
-      'editor.lineHighlightBackground': '#EFEAD9',
-      'editor.lineHighlightBorder': '#00000000',
-      'editorGutter.background': '#FAF6EC',
-      'editorGutter.modifiedBackground': '#9C7A1F',
-      'editorGutter.addedBackground': '#5F915F',
-      'editorGutter.deletedBackground': '#7A1E2E',
-      'diffEditor.insertedTextBackground': 'rgba(95, 145, 95, 0.18)',
-      'diffEditor.removedTextBackground': 'rgba(122, 30, 46, 0.18)',
-      'diffEditor.insertedLineBackground': 'rgba(95, 145, 95, 0.10)',
-      'diffEditor.removedLineBackground': 'rgba(122, 30, 46, 0.10)',
-      'editorIndentGuide.background': '#E9E3D2',
-      'editor.selectionBackground': 'rgba(156, 122, 31, 0.22)',
-      'editorWidget.background': '#FAF6EC',
-      'editorWidget.border': '#D9D2C0',
-      'scrollbarSlider.background': 'rgba(14, 17, 22, 0.10)',
-      'scrollbarSlider.hoverBackground': 'rgba(14, 17, 22, 0.18)',
-      'diffEditor.border': '#D9D2C0',
-    },
-  });
-}
+// Bundle Monaco locally (no CDN) and register the circuitus-light theme
+// before any editor mounts.
+ensureMonacoSetup();
 
 interface DraftCompareProps {
   drafts: ReadonlyArray<Draft>;

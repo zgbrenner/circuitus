@@ -4,7 +4,9 @@ import { getCurrentUser } from '@/lib/auth';
 const NAV_ITEMS = [
   'Practice Guides',
   'Templates',
+  'Exhibits',
   'Authorities',
+  'Citations',
   'Models',
   'Compliance',
   'Audio',

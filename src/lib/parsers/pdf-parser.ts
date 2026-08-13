@@ -2,7 +2,10 @@ import * as pdfjsLib from 'pdfjs-dist';
 import type { ParsedDocument, DocumentChapter } from '@/types';
 import { escapeHtml } from './sanitize';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+// BASE_URL-relative (not absolute) so the worker also resolves when the app
+// is served from file:// inside the Electron desktop shell (base: './').
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  import.meta.env.BASE_URL + 'pdf.worker.min.js';
 
 /** Y-position threshold (in PDF units) for grouping text items into the same line. */
 const LINE_Y_THRESHOLD = 2;
