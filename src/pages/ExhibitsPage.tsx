@@ -92,9 +92,13 @@ export default function ExhibitsPage() {
   const [loaded, setLoaded] = useState(false);
   const [stats, setStats] = useState<EditorStats | null>(null);
   const [instrumentView, setInstrumentView] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  // dragenter/dragleave fire for every child crossed; the depth counter
+  // guards against duplicate firing so the overlay doesn't flicker.
+  const dragDepthRef = useRef(0);
 
   const activeFile = useMemo(
     () => files.find((f) => f.id === activeId) ?? null,
@@ -245,8 +249,69 @@ export default function ExhibitsPage() {
     editorRef.current = editor;
   };
 
+  // ── Drag-and-drop import (OS files onto the page) ──────────────────────
+  // Drops funnel into handleImportFiles — the exact same path (and 2 MB
+  // size check) as the hidden-input Import button.
+
+  function isFileDrag(e: React.DragEvent): boolean {
+    return Array.from(e.dataTransfer.types).includes('Files');
+  }
+
+  function handleDragEnter(e: React.DragEvent) {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    dragDepthRef.current += 1;
+    if (dragDepthRef.current === 1) setDragActive(true);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    if (!isFileDrag(e)) return;
+    // preventDefault is required for drop to fire; without it the browser
+    // navigates away to the dropped file.
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    if (!isFileDrag(e)) return;
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setDragActive(false);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    dragDepthRef.current = 0;
+    setDragActive(false);
+    if (e.dataTransfer.files.length > 0) {
+      void handleImportFiles(e.dataTransfer.files);
+    }
+  }
+
   return (
-    <div className="flex-1 flex flex-col bg-cream overflow-hidden">
+    <div
+      className="flex-1 flex flex-col bg-cream overflow-hidden relative"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drop overlay — covers the page (including Monaco, which would
+          otherwise intercept the drop) while an OS file drag is over it. */}
+      {dragActive && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-cream/90">
+          <div
+            className="px-12 py-10 bg-white text-center"
+            style={{ border: '2px dashed #9C7A1F', borderRadius: 0 }}
+          >
+            <Upload className="w-5 h-5 text-gold mx-auto mb-3" aria-hidden />
+            <p className="font-serif italic text-navy text-base">Lodge with the compiler…</p>
+            <p className="text-[10px] font-mono text-text-muted mt-2">
+              Release to annex the tendered materials to the record.
+            </p>
+          </div>
+        </div>
+      )}
       {/* Masthead */}
       <div className="border-b border-border bg-white px-6 py-3 flex items-center justify-between flex-shrink-0">
         <div>

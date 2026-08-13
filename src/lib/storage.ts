@@ -9,6 +9,7 @@ import type {
   AudioTrack,
   SpreadsheetWorkbook,
   CodeFile,
+  DepositionVideo,
 } from '@/types';
 
 interface CircuitusDB {
@@ -66,13 +67,20 @@ interface CircuitusDB {
       'by-updatedAt': string;
     };
   };
+  videos: {
+    key: string;
+    value: DepositionVideo;
+    indexes: {
+      'by-addedAt': string;
+    };
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<CircuitusDB>> | null = null;
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<CircuitusDB>('circuitus-db', 6, {
+    dbPromise = openDB<CircuitusDB>('circuitus-db', 7, {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
           const docStore = db.createObjectStore('documents', { keyPath: 'id' });
@@ -103,6 +111,10 @@ function getDB() {
         if (oldVersion < 6) {
           const cfStore = db.createObjectStore('codefiles', { keyPath: 'id' });
           cfStore.createIndex('by-updatedAt', 'updatedAt');
+        }
+        if (oldVersion < 7) {
+          const videoStore = db.createObjectStore('videos', { keyPath: 'id' });
+          videoStore.createIndex('by-addedAt', 'addedAt');
         }
       },
     });
@@ -266,6 +278,23 @@ export async function getAllCodeFiles(): Promise<CodeFile[]> {
 export async function deleteCodeFile(id: string): Promise<void> {
   const db = await getDB();
   await db.delete('codefiles', id);
+}
+
+// Deposition videos (Depositions tab — recording review)
+export async function saveVideo(video: DepositionVideo): Promise<void> {
+  const db = await getDB();
+  await db.put('videos', video);
+}
+
+export async function getAllVideos(): Promise<DepositionVideo[]> {
+  const db = await getDB();
+  const all = await db.getAll('videos');
+  return all.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
+}
+
+export async function deleteVideo(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete('videos', id);
 }
 
 // Spreadsheet workbooks

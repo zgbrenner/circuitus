@@ -1,12 +1,22 @@
 import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import type { HotCorner } from '@/hooks/useQuickRef';
 
 interface ShortcutsOverlayProps {
   open: boolean;
   onClose: () => void;
   quickRefChord: string;
+  /** Current hot-corner setting; when provided (with the handler) a control row renders. */
+  hotCorner?: HotCorner;
+  onHotCornerChange?: (value: HotCorner) => void;
 }
+
+const HOT_CORNER_OPTIONS: ReadonlyArray<{ value: HotCorner; label: string }> = [
+  { value: 'off', label: 'Off' },
+  { value: 'tl', label: 'Top-Left' },
+  { value: 'tr', label: 'Top-Right' },
+];
 
 interface Row {
   keys: string[];
@@ -18,7 +28,13 @@ interface Group {
   rows: Row[];
 }
 
-export default function ShortcutsOverlay({ open, onClose, quickRefChord }: ShortcutsOverlayProps) {
+export default function ShortcutsOverlay({
+  open,
+  onClose,
+  quickRefChord,
+  hotCorner,
+  onHotCornerChange,
+}: ShortcutsOverlayProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   useFocusTrap(open, dialogRef);
 
@@ -41,6 +57,7 @@ export default function ShortcutsOverlay({ open, onClose, quickRefChord }: Short
         ...(typeof window !== 'undefined' && window.circuitusDesktop
           ? [{ keys: ['Ctrl', 'Shift', 'H'], label: 'Vanish window (system-wide)' }]
           : []),
+        { keys: ['250 ms'], label: 'Hot corner dwell engages cover (exit is chord-only)' },
         { keys: ['?'], label: 'Open this keybinding sheet' },
       ],
     },
@@ -130,6 +147,40 @@ export default function ShortcutsOverlay({ open, onClose, quickRefChord }: Short
                   </li>
                 ))}
               </ul>
+              {g.title === 'Cover & Privacy' && hotCorner !== undefined && onHotCornerChange && (
+                <div
+                  className="flex items-center justify-between gap-4 py-1.5"
+                  style={{ borderBottom: '1px dashed #E9E3D2' }}
+                >
+                  <span className="font-serif text-[13px] italic text-ink-soft">
+                    Hot corner engages cover
+                  </span>
+                  <span className="flex items-center gap-1 flex-shrink-0" role="group" aria-label="Hot corner setting">
+                    {HOT_CORNER_OPTIONS.map((opt) => {
+                      const active = hotCorner === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => onHotCornerChange(opt.value)}
+                          aria-pressed={active}
+                          className={`font-sans text-[9.5px] uppercase tracking-wider px-2 py-0.5 transition-colors ${
+                            active ? 'text-brass bg-paper-cool' : 'text-ink-muted hover:text-ink'
+                          }`}
+                          style={{
+                            borderRadius: 0,
+                            border: active ? '1px solid #9C7A1F' : '1px solid #D9D2C0',
+                            boxShadow: active
+                              ? 'inset 0 0 0 1px rgba(184, 147, 43, 0.15)'
+                              : undefined,
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </span>
+                </div>
+              )}
             </section>
           ))}
         </div>

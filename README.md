@@ -89,6 +89,10 @@ Running the desktop app? The Citations desk gains a **Live Session** mode — a 
 
 The **Exhibits** tab is a full multi-file code workspace (Monaco — the editor engine behind VS Code) dressed as an exhibit annexing system. Files persist locally in IndexedDB, languages are auto-detected, and imports/exports work with plain files on disk. The **Instrument View** toggle instantly swaps the editor for a practice-guide document; the global quick-reference chord covers this tab like every other.
 
+## Deposition Review
+
+The **Depositions** tab is a video room dressed as certified-recording review: lodge YouTube links or direct media URLs, or import video files (stored locally in IndexedDB). Each recording gets a transcript-style case caption, and **Compact Review** docks the player into a small corner panel while the main pane shows an errata sheet — playback never restarts.
+
 ## Desktop App
 
 An optional Electron shell (`npm run desktop`) wraps the suite in a native window:
@@ -103,7 +107,7 @@ See [`electron/README.md`](electron/README.md) for details.
 
 ## Quick Reference Mode
 
-<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd> instantly switches the entire UI to display a practice guide on SOW structuring. Your previous state is saved and restored when you press the shortcut again.
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd> instantly switches the entire UI to display a practice guide on SOW structuring. Your previous state is saved and restored when you press the shortcut again. An optional **hot corner** (configurable in the <kbd>?</kbd> shortcuts sheet) engages the cover when your cursor dwells in a top screen corner — no keys required.
 
 The status bar indicates when quick-reference mode is active.
 

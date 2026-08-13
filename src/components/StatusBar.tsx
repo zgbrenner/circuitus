@@ -82,7 +82,7 @@ export default function StatusBar({
             <span className="text-ink-muted/40 ml-1">— Quick Reference</span>
           </span>
         )}
-        <span className="font-mono text-[10px] text-ink-muted/40">v.2.8.0</span>
+        <span className="font-mono text-[10px] text-ink-muted/40">v.{__APP_VERSION__}</span>
       </div>
     </div>
   );

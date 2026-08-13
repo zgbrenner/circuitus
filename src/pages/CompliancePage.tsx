@@ -1,12 +1,22 @@
 import { useState, type ComponentType } from 'react';
-import { Brain, Grid3x3, Calculator, Layers, ArrowLeft } from 'lucide-react';
+import {
+  Brain,
+  Grid3x3,
+  Calculator,
+  Layers,
+  ArrowLeft,
+  ListOrdered,
+  AlertTriangle,
+} from 'lucide-react';
 import Wordle from '@/games/Wordle';
 import Sudoku from '@/games/Sudoku';
 import Game2048 from '@/games/Game2048';
 import ChessGame from '@/games/ChessBoard';
+import Solitaire from '@/games/Solitaire';
+import Minesweeper from '@/games/Minesweeper';
 
 interface Exercise {
-  id: 'wordle' | 'sudoku' | '2048' | 'chess';
+  id: 'wordle' | 'sudoku' | '2048' | 'chess' | 'solitaire' | 'minesweeper';
   label: string;
   category: string;
   description: string;
@@ -55,6 +65,26 @@ const EXERCISES: ReadonlyArray<Exercise> = [
     cleCredits: '1.00 CLE',
     Icon: Layers,
     Component: ChessGame,
+  },
+  {
+    id: 'solitaire',
+    label: 'Chronological Sequencing Drill',
+    category: 'Records Management',
+    description:
+      'File each instrument of the record in strict sequence across four registers. Session resumes where you left off.',
+    cleCredits: '0.50 CLE',
+    Icon: ListOrdered,
+    Component: Solitaire,
+  },
+  {
+    id: 'minesweeper',
+    label: 'Risk Assessment Matrix',
+    category: 'Due Diligence Lab',
+    description:
+      'Survey the engagement grid and isolate undisclosed liabilities from adjacency disclosures. Three exposure tiers.',
+    cleCredits: '0.75 CLE',
+    Icon: AlertTriangle,
+    Component: Minesweeper,
   },
 ];
 

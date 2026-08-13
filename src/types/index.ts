@@ -98,6 +98,18 @@ export interface AudioTrack {
   addedAt: string;
 }
 
+export interface DepositionVideo {
+  id: string;
+  title: string;
+  kind: 'youtube' | 'url' | 'file';
+  /** youtube video id, http(s) media URL, or empty for kind 'file' */
+  ref: string;
+  /** present only for kind 'file' */
+  blob?: Blob;
+  mimeType?: string;
+  addedAt: string; // ISO
+}
+
 export interface MatterNote {
   /** Document/matter id this note belongs to. Use 'global' for the catch-all pad. */
   documentId: string;
