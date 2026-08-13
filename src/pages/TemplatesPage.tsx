@@ -23,16 +23,34 @@ const SAVE_DEBOUNCE_MS = 700;
    its own overlay div and never touches the Tiptap editor or any saved
    draft — toggling it off restores the real editor instantly. */
 
+/**
+ * Strip every tag repeatedly until the string stops changing — a single
+ * pass can leave a tag behind when removal reassembles one (e.g.
+ * `<<x>script>`) — then drop residual tag-open brackets so no tag-shaped
+ * sequence survives. Output only ever lands in React text nodes.
+ */
+function stripTags(s: string): string {
+  let prev: string;
+  do {
+    prev = s;
+    s = s.replace(/<[^>]+>/g, '');
+  } while (s !== prev);
+  return s.replace(/<(?=[a-zA-Z/!])/g, '');
+}
+
 /** Strip template HTML down to plain-text paragraphs for the typing pool. */
 function htmlToParagraphs(html: string): string[] {
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(?:p|h[1-6]|li|blockquote)>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
+  return stripTags(
+    html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(?:p|h[1-6]|li|blockquote)>/gi, '\n'),
+  )
+    // Decode entities with &amp; LAST, so "&amp;lt;" yields the literal
+    // text "&lt;" instead of being double-unescaped to "<".
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
     .split('\n')
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter((line) => line.length > 3 && !/^\[.*\]$/.test(line));
